@@ -1,0 +1,50 @@
+#include <msp430g2553.h>
+
+#define UART_TXD 0x02;		// TXD on P1.1 (Timer0_A.OUT0)
+#define UART_RXD 0x04;		// RXD on P1.2 (Timer0_A.CCI1A)
+
+#define UART_TBIT_DIV_2 	(1000000 / (9600 * 2))		// Conditions for 9600 Baud SW UART, SMCLK = 1 MHz
+#define UART_TBIT			(1000000 / 9600)
+
+unsigned int txData;			// UART internal variable for TX
+unsigned char rxBuffer;			// Received UART character
+
+void TimerA_UART_tx(unsigned char byte);
+void TimerA_UART_print(char *string);
+
+void main(void) {
+    WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
+    DCOCTL = 0x00;				// Set DCOCLK to 1MHz
+    BCSCTL1 = CALBC1_1MHz;
+    DCOCTL = CALDCO_1MHz;
+    P1OUT = 0x00; 				// Initialize all GPIOs
+
+    P1SEL = UART_TXD + UART_RXD;	// Timer function for TXD/RXD pins
+    P1DIR = OxFF & ~UART_RXD;		// Set all pins but RXD to output
+
+    // Configure Timer_A for full-duplex UART operation
+    TA0CCTL0 = OUT;			// Set TXD Idle as Mark = '1'
+    TA0CCTL1 = SCS + CM1 + CAP + CCIE;   // Sync, Neg Edge, Capture, Int
+    TA0CCTL = TASSEL_2 + MC_2;			// SMCLK, start in continuous mode
+
+    _BIS_SR(GIE);
+
+    TimerA_UART_print("G2553 Timer A UART \n");
+    TimerA_UART_print("READY.\r\n");
+    while(1){				// waiting for incoming character
+    	_BIS_SR(LPM0_bits); // Enter low power mode
+    	TimerA_UART_tx(rxBuffer);		// Transmit the received data
+
+    }
+}
+
+void TimerA_UART_tx(unsigned char byte){		// Output one byte using the Timer_A UART
+	while(TACCTL0 & CCIE);			// Ensure last char got TX'd
+	TA0CCR0 = TAR;					// Current state of TA counter
+	TA0CCR0 += UART_TBIT;			// One bit time till first bit
+	TA0CCTL0 = OUTMOD0 + CCIE;		// Set TXD on EQU0, Int
+	txData = byte;					// Load global variable
+	txData |= 0x100;				// Add mark stop bit to TXData
+	txData <<= 1;					// Add space start bit
+	
+}
