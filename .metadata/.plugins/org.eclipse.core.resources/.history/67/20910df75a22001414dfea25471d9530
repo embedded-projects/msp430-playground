@@ -1,0 +1,31 @@
+/*
+ * Reference: http://mspsci.blogspot.com/2012/05/tutorial-16f-transmitter.html
+ */
+#include <msp430g2553.h>
+
+#define bit_time    768       			// 9600 baud
+#define SET        (OUTMOD_1 + CCIE)	// Timer_A sets on next interrupt
+#define RST        (OUTMOD_5 + CCIE)	// Timer_A resets on next interrupt
+#define IDLE        OUTMOD_1			// Timer_A stops interrupting
+#define TXbit       BIT0				// Define bit in UART_FG to show Tx
+
+#define LED1        BIT0
+#define LED2        BIT6
+#define BTN1        BIT3
+#define P1TX        BIT1        		// Tx on P1.1
+
+int TXBuffer;       		// Buffer for storing current transmission byte
+char UART_FG=0;     		// flags for UART: BIT0 is TX in process flag
+char bit_count=10;  		// bit counter for transmission, 8N1 is 10 bits
+
+/*  Function definitions  */
+void DCO_init(void);
+void P1_init(void);
+void TA_init(void);
+void tx_byte(char byte);
+
+void main(void) {
+    WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
+	
+	return 0;
+}

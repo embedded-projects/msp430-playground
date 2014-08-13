@@ -1,0 +1,89 @@
+/*
+ * Reference: http://mspsci.blogspot.com/2012/05/tutorial-16f-transmitter.html
+ */
+#include <msp430g2553.h>
+
+#define bit_time    768       			// 9600 baud
+#define SET        (OUTMOD_1 + CCIE)	// Timer_A sets on next interrupt
+#define RST        (OUTMOD_5 + CCIE)	// Timer_A resets on next interrupt
+#define IDLE        OUTMOD_1			// Timer_A stops interrupting
+#define TXbit       BIT0				// Define bit in UART_FG to show Tx
+
+#define LED1        BIT0
+#define LED2        BIT6
+#define BTN1        BIT3
+#define P1TX        BIT1        		// Tx on P1.1
+
+int TXBuffer;       		// Buffer for storing current transmission byte
+char UART_FG=0;     		// flags for UART: BIT0 is TX in process flag
+char bit_count=10;  		// bit counter for transmission, 8N1 is 10 bits
+
+/*  Function definitions  */
+void DCO_init(void);
+void P1_init(void);
+void TA_init(void);
+void tx_byte(char byte);
+void delay(unsigned int);
+
+void main(void) {
+    char message[18]="Hello from MSPSCI!";
+    char i,count=0;
+
+    WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
+    DCO_init();
+    P1_init();
+    TA_init();
+    __delay_cycles(1474560);	// Delay 0.2 s to let clocks settle
+    _enable_interrupt();
+	return 0;
+    while(1) {
+        while (P1IN & BTN1);
+        __delay_cycles(100);	// Debounce switch
+        if (P1IN & BTN1) {
+        	count++;
+        	for (i=0; i<18; i++)
+        		tx_byte(message[i]);
+        	tx_byte(' ');
+        	tx_byte(count+48);
+        	tx_byte('\r');
+        	tx_byte('\n');
+        	if (count==9)
+        		count = 0;
+        }
+    }
+}
+
+void DCO_init(void) {
+    char j;
+    if ((CALBC1_UART == 0xFF) || (CALDCO_UART == 0xFF)) {
+        /* DCO Calibrations not present! Trap processor to prevent damage.
+         * Flash LED on P1.0 in patterns of three to indicate DCO error.
+         */
+        P1OUT=0;
+        P1DIR=LED1;
+        for(;;) {
+            for (j=0; j<6; j++) {
+                P1OUT ^= LED1;
+                delay(50000);
+            }
+            for (j=0; j<3; j++) {
+                delay(50000);
+            }
+        }
+    } // end if for DCO trap.
+    else {
+        BCSCTL1 = CALBC1_UART;
+        DCOCTL = CALDCO_UART;
+    }
+} // DCO_init
+
+void P1_init(void) {
+    P1OUT = P1TX;   // default to mark (idle)
+    P1DIR = LED2 + P1TX;
+    P1SEL = P1TX;   // set P1.1 to TA0.0 output
+} // P1_init
+
+void delay(unsigned int time){
+	unsigned int i;
+	for(i = 0; i <time; i++);
+}

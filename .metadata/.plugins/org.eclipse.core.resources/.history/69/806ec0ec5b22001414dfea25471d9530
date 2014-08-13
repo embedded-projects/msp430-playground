@@ -1,0 +1,104 @@
+/*
+ * Reference: http://mspsci.blogspot.com/2012/05/tutorial-16f-transmitter.html
+ */
+#include <msp430g2553.h>
+
+#define bit_time    768       			// 9600 baud
+#define SET        (OUTMOD_1 + CCIE)	// Timer_A sets on next interrupt
+#define RST        (OUTMOD_5 + CCIE)	// Timer_A resets on next interrupt
+#define IDLE        OUTMOD_1			// Timer_A stops interrupting
+#define TXbit       BIT0				// Define bit in UART_FG to show Tx
+
+#define LED1        BIT0
+#define LED2        BIT6
+#define BTN1        BIT3
+#define P1TX        BIT1        		// Tx on P1.1
+
+int TXBuffer;       		// Buffer for storing current transmission byte
+char UART_FG=0;     		// flags for UART: BIT0 is TX in process flag
+char bit_count=10;  		// bit counter for transmission, 8N1 is 10 bits
+
+/*  Function definitions  */
+void DCO_init(void);
+void P1_init(void);
+void TA_init(void);
+void tx_byte(char byte);
+void delay(unsigned int);
+
+void main(void) {
+    char message[18]="Hello from MSPSCI!";
+    char i,count=0;
+
+    WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
+    DCO_init();
+    P1_init();
+    TA_init();
+    __delay_cycles(1474560);	// Delay 0.2 s to let clocks settle
+    _enable_interrupt();
+	return 0;
+    while(1) {
+        while (P1IN & BTN1);
+        __delay_cycles(100);	// Debounce switch
+        if (P1IN & BTN1) {
+        	count++;
+        	for (i=0; i<18; i++)
+        		tx_byte(message[i]);
+        	tx_byte(' ');
+        	tx_byte(count+48);
+        	tx_byte('\r');
+        	tx_byte('\n');
+        	if (count==9)
+        		count = 0;
+        }
+    }
+}
+
+void DCO_init(void) {
+    DCOCTL = 0x00;
+    BCSCTL1 = CALBC1_1MHZ;
+    DCOCTL = CALDCO_1MHZ;
+} // DCO_init
+
+void P1_init(void) {
+    P1OUT = P1TX;   // default to mark (idle)
+    P1DIR = LED2 + P1TX;
+    P1SEL = P1TX;   // set P1.1 to TA0.0 output
+} // P1_init
+
+void tx_byte(char byte) {
+    while (UART_FG & TXbit);    // trap until free to transmit
+    TXBuffer = (byte | 0xff00);	// prepare byte for transmission: add stop bit
+    UART_FG |= TXbit;           // mark Tx flag
+    P1OUT |= LED2;              // indicate transmission
+    bit_count--;				// count start bit
+    TACCTL0 &= ~CCIFG;			// clear interupt flag
+    TACCR0 = TAR + bit_time;	// set trigger for first bit
+    TACCTL0 = RST;            	// reset for start bit
+}
+
+/*  Interrupt Service Routines  */
+#pragma vector = TIMERA0_VECTOR
+__interrupt void CCR0_ISR(void) {
+    TACCR0 += bit_time;         // set next interrupt
+    P1OUT ^= BIT5;				// toggle P1.4
+
+    if (bit_count == 0) {       // Tx Complete
+        TACCTL0 = IDLE;         // Idle TA0.0
+        bit_count=10;           // reset bit counter
+        UART_FG &= ~TXbit;      // clear Tx flag
+        P1OUT &= ~LED2;         // clear transmission indicator
+    }
+    else {
+        if (TXBuffer & BIT0)
+            TACCTL0 = SET;
+        else
+            TACCTL0 = RST;
+        TXBuffer >>= 1;         // shift TXBuffer down one bit
+        bit_count--;
+    }
+} // CCR0_ISR
+
+void delay(unsigned int time){
+	unsigned int i;
+	for(i = 0; i <time; i++);
+}
