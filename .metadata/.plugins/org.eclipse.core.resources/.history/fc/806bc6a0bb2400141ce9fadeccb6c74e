@@ -1,0 +1,15 @@
+#include <msp430.h> 
+
+unsigned int ADC_value = 0;
+
+// function prototype
+void ConfigureADC(void);
+
+int main(void) {
+    WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
+	BCSCTL1 = CALBC1_1MHZ;
+	DCOCTL = CALDCO_1MHZ;
+	
+
+	return 0;
+}
