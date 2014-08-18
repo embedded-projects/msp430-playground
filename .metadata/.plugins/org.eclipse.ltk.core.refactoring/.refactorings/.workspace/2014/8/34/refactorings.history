@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Rename resource &apos;ADC10_accel&apos; to &apos;ADC10_test&apos;" description="Rename resource &apos;ADC10_accel&apos;" flags="7" id="org.eclipse.ltk.core.refactoring.rename.resource" input="/ADC10_accel" name="ADC10_test" stamp="1408374812400" updateReferences="true"/>
+</session>
