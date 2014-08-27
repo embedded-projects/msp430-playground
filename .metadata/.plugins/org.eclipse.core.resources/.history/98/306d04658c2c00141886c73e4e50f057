@@ -1,0 +1,109 @@
+#include <msp430g2553.h>
+
+#include "uart.h"
+unsigned int ADC_value = 0;
+
+// function prototype
+void ConfigureADC(void);
+
+void uart_rx_isr(unsigned char c) {
+	uart_putc(c);
+	P1OUT ^= BIT0;		// toggle P1.0 (red led)
+}
+
+unsigned char counter;				// Current location in wave array
+unsigned char wave[32] = {			// Wave array, preset to values of sine
+	128, 140, 152, 164, 173, 181, 187, 191,
+	192, 191, 187, 181, 173, 164, 152, 140,
+	128, 116, 104, 92, 83, 75, 69, 65,
+	64, 65, 69, 75, 83, 92, 104, 116 };
+
+unsigned int i;						// Used for 'for' loops.
+
+int main(void) {
+    WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
+    P1OUT = 0;
+	P1DIR |= BIT0 + BIT6;
+	P1OUT  = BIT0 + BIT6; 		// All LEDs on
+	P1SEL |= BIT6;
+	counter = 0;								// Reset counter
+
+	BCSCTL2 &= ~(DIVS_3);		// SMCLK = DCO = 1MHZ
+	P1SEL |= BIT3;				// ADCinput pin P1.3
+	ConfigureADC();
+
+	// Initialize Timer
+	CCTL0 = CCIE;								// CCR0 interrupt enabled
+	CCTL1 = CCIE;								// CCR1 interrupt enabled
+	CCR0 = 256;									// Set PWM period to 256 clock ticks
+	CCR1 = wave[counter];						// Set first duty cycle value
+    TA0CCTL1 = OUTMOD_7;						// TA0CCR1 reset/set -- high voltage below count and low voltage when past
+	TACTL = TASSEL_2 + MC_1 + TAIE + TACLR;		// SMCLK, upmode, enable interrupt, clear TA1R
+
+
+    uart_init();
+
+	// register ISR called when data was received
+    uart_set_rx_isr_ptr(uart_rx_isr);
+
+    __bis_SR_register(GIE);
+	__enable_interrupt();			// Enable interrupts
+
+	_BIS_SR(LPM0_bits + GIE);					// Enter LPM0 w/ interrupt
+
+	while(1){
+		__delay_cycles(1000);		// Wait for ADC Ref to settle
+		ADC10CTL0 |= ENC + ADC10SC;	// Sampling and conversion starts
+		__bis_SR_register(CPUOFF + GIE);	// Low power mode 0 with interrupts enable
+		ADC_value = ADC10MEM;		// Assigns the value held in ADC10MEM
+		uart_putc((ADC_value >> 8 ) & 0xFF);
+		uart_putc(ADC_value & 0xFF);
+	}
+}
+
+/**
+ * TimerA0 interrupt service routine
+ **/
+#pragma vector=TIMER0_A0_VECTOR
+__interrupt void TIMERA0_ISR(void)
+{
+	//P1OUT |= BIT0;
+	
+	CCR1 = wave[counter];		// Set next duty cycle value
+	counter += 1;				// Add Offset to CCR0
+	if ( counter == 32)			// If counter is at the end of the array
+	{
+		counter = 0;			// Reset counter
+	}
+}
+
+/**
+ * TimerA1 Interrupt Vector (TAIV) handler
+ **/
+#pragma vector=TIMER0_A1_VECTOR
+__interrupt void TIMERA1_ISR(void)
+{
+	switch( TAIV )
+	{
+		case  2:				// CCR1 interrupt
+			//P1OUT &= ~BIT0;
+			break;
+		default:
+			break;
+	}
+}
+
+// ADC10 interrupt service routine
+#pragma vector = ADC10_VECTOR
+__interrupt void ADC10_ISR(void){
+	__bic_SR_register_on_exit(CPUOFF);	// Return to activate mode
+}
+
+// Function containing ADC set-up
+void ConfigureADC(void){
+	ADC10CTL1 = INCH_3 + ADC10DIV_3;	// Channel 3, ADC10CLK/3
+	ADC10CTL1 &= ~ADC10DF; // Binary format
+	ADC10CTL0 = SREF_0 + ADC10SHT_3 + ADC10ON + ADC10IE;	// Vcc & Vss as reference, Sample and hold for 64 Clock cycles, ADC on, ADC interrupt enable
+	ADC10AE0 |= BIT3;				// ADC input enable P1.3
+}
+

@@ -80,6 +80,10 @@ void uart_puts(const char *str)
      while(*str) uart_putc(*str++);
 }
 
+void uart_putint(unsigned int i){
+	uart_putc((i >> 8 ) & 0xFF);
+	uart_putc(i & 0xFF);
+}
 #pragma vector=USCIAB0RX_VECTOR
 __interrupt void USCI0RX_ISR(void)
 {

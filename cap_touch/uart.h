@@ -77,6 +77,11 @@ void uart_putc(unsigned char c);
  */
 void uart_puts(const char *str);
 
-
+/**
+ * Write an unsigned int to the UART blocking.
+ *
+ * @param[in]	i	the unsigned int (16-bit) to write
+ */
+void uart_putint(unsigned int i);
 
 #endif /* UART_H_ */
